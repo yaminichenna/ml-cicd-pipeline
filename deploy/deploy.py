@@ -1,59 +1,44 @@
 import boto3
 import os
 import time
-from botocore.exceptions import ClientError
 
-# Environment variables from GitHub Secrets
-region = os.environ["AWS_REGION"]
-bucket = os.environ["S3_BUCKET_NAME"]
-role = os.environ["SAGEMAKER_ROLE_ARN"]
+sm_client = boto3.client("sagemaker", region_name=os.environ["AWS_REGION"])
 
-# Unique resource names
-timestamp = str(int(time.time()))
-model_name = f"ml-model-{timestamp}"
-endpoint_config_name = f"{model_name}-config"
-endpoint_name = "ml-endpoint"
+model_name = f"ml-model-{int(time.time())}"
+model_data_url = f"s3://{os.environ['S3_BUCKET_NAME']}/models/model.tar.gz"
 
-# Initialize SageMaker client
-sagemaker = boto3.client("sagemaker", region_name=region)
-
-# Container definition (scikit-learn prebuilt container)
-container = {
-    "Image": "683313688378.dkr.ecr.us-east-1.amazonaws.com/sagemaker-scikit-learn:0.23-1-cpu-py3",
-    "ModelDataUrl": f"s3://{bucket}/model/model.tar.gz"
-}
+print(f"Creating model: {model_name}")
 
 try:
-    # 1. Create SageMaker model
-    print(f"Creating model: {model_name}")
-    sagemaker.create_model(
+    sm_client.create_model(
         ModelName=model_name,
-        ExecutionRoleArn=role,
-        PrimaryContainer=container
+        PrimaryContainer={
+            "Image": "683313688378.dkr.ecr.us-east-1.amazonaws.com/sagemaker-scikit-learn:0.23-1-cpu-py3",
+            "ModelDataUrl": model_data_url,
+        },
+        ExecutionRoleArn=os.environ["SAGEMAKER_ROLE_ARN"],
     )
 
-    # 2. Create endpoint config
-    print(f" Creating endpoint config: {endpoint_config_name}")
-    sagemaker.create_endpoint_config(
+    print("Creating endpoint config...")
+    endpoint_config_name = model_name + "-config"
+    sm_client.create_endpoint_config(
         EndpointConfigName=endpoint_config_name,
         ProductionVariants=[
             {
                 "VariantName": "AllTraffic",
                 "ModelName": model_name,
+                "InitialInstanceCount": 1,
                 "InstanceType": "ml.t2.medium",
-                "InitialInstanceCount": 1
             }
-        ]
+        ],
     )
 
-    # 3. Deploy endpoint
-    print(f" Deploying endpoint: {endpoint_name}")
-    sagemaker.create_endpoint(
-        EndpointName=endpoint_name,
+    print("Creating endpoint...")
+    sm_client.create_endpoint(
+        EndpointName="ml-endpoint",
         EndpointConfigName=endpoint_config_name
     )
 
-    print(f" SageMaker endpoint '{endpoint_name}' deployment started.")
-
-except ClientError as e:
-    print(f" Deployment failed: {e}")
+    print("Deployment triggered. Monitor status in SageMaker Console → Endpoints.")
+except Exception as e:
+    print("Deployment failed:", e)
