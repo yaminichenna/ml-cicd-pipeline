@@ -31,7 +31,7 @@ with tarfile.open(archive_path, "w:gz") as tar:
 # Upload tar.gz to S3
 s3 = boto3.client("s3")
 bucket = os.environ["S3_BUCKET_NAME"]  # Use GitHub Secret at runtime
-s3.upload_file(archive_path, bucket, "model/model.tar.gz")
+s3.upload_file(archive_path, bucket, "models/model.tar.gz")
 
-print(f"Model trained and uploaded to s3://{bucket}/model/model.tar.gz")
+print(f"Model trained and uploaded to s3://{bucket}/models/model.tar.gz")
 
