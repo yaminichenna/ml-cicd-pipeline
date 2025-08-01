@@ -2,26 +2,39 @@ import boto3
 import os
 import time
 
-sm_client = boto3.client("sagemaker", region_name=os.environ["AWS_REGION"])
+# AWS clients
+region = os.environ.get("AWS_REGION", "us-east-1")
+sagemaker = boto3.client("sagemaker", region_name=region)
 
-model_name = f"ml-model-{int(time.time())}"
-model_data_url = f"s3://{os.environ['S3_BUCKET_NAME']}/models/model.tar.gz"
+# Dynamic model and endpoint names
+timestamp = int(time.time())
+model_name = f"ml-model-{timestamp}"
+endpoint_config_name = f"ml-config-{timestamp}"
+endpoint_name = f"ml-endpoint-{timestamp}"  # 🆕 unique endpoint name
 
-print(f"Creating model: {model_name}")
+# S3 path to model
+bucket = os.environ["S3_BUCKET_NAME"]
+model_data_url = f"s3://{bucket}/models/model.tar.gz"
 
+# SageMaker container image
+container_image = "683313688378.dkr.ecr.us-east-1.amazonaws.com/sagemaker-scikit-learn:0.23-1-cpu-py3"
+
+# IAM role
+role = os.environ["SAGEMAKER_ROLE_ARN"]
+
+print(f" Creating model: {model_name}")
 try:
-    sm_client.create_model(
+    sagemaker.create_model(
         ModelName=model_name,
         PrimaryContainer={
-            "Image": "683313688378.dkr.ecr.us-east-1.amazonaws.com/sagemaker-scikit-learn:0.23-1-cpu-py3",
+            "Image": container_image,
             "ModelDataUrl": model_data_url,
         },
-        ExecutionRoleArn=os.environ["SAGEMAKER_ROLE_ARN"],
+        ExecutionRoleArn=role,
     )
 
-    print("Creating endpoint config...")
-    endpoint_config_name = model_name + "-config"
-    sm_client.create_endpoint_config(
+    print(f" Creating endpoint config: {endpoint_config_name}")
+    sagemaker.create_endpoint_config(
         EndpointConfigName=endpoint_config_name,
         ProductionVariants=[
             {
@@ -33,12 +46,15 @@ try:
         ],
     )
 
-    print("Creating endpoint...")
-    sm_client.create_endpoint(
-        EndpointName="ml-endpoint",
+    print(f" Creating endpoint: {endpoint_name}")
+    sagemaker.create_endpoint(
+        EndpointName=endpoint_name,
         EndpointConfigName=endpoint_config_name
     )
 
-    print("Deployment triggered. Monitor status in SageMaker Console → Endpoints.")
+    print(" Deployment started. Check AWS Console → SageMaker → Endpoints")
+    print(f" Endpoint Name: {endpoint_name}")
+
 except Exception as e:
-    print("Deployment failed:", e)
+    print(" Deployment failed:", e)
+
